@@ -209,6 +209,11 @@ try {
 			readfile( $zip_path ) ;
 
 			/**
+			* Удаление файла ZIP.
+			*/
+			unlink( $zip_path ) ;
+
+			/**
 			* Конец обработки.
 			*/
 			exit( 0 ) ;
