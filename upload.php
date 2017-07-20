@@ -206,7 +206,7 @@ try {
 			header( 'Content-Type: ' . ZIP_MIME ) ;
 			header( 'Content-Disposition: attachment;filename="Результат-' . date( 'Y-m-d-H-i-s' ) . '.' . ZIP_EXT . '"' ) ;
 
-			readfile( ) ;
+			readfile( $zip_path ) ;
 
 			/**
 			* Конец обработки.
