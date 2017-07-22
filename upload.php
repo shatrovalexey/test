@@ -12,6 +12,27 @@
 *
 */
 
+function get_in_translate_to_en( $string ) {
+	$arStrES = array('ае','уе','ое','ые','ие','эе','яе','юе','ёе','ее','ье','ъе','ый','ий');
+	$arStrOS = array('аё','уё','оё','ыё','иё','эё','яё','юё','ёё','её','ьё','ъё','ый','ий');        
+	$arStrRS = array('а$','у$','о$','ы$','и$','э$','я$','ю$','ё$','е$','ь$','ъ$','@','@');
+	$replace = array(
+		'А' => 'A','а' => 'a','Б' => 'B','б' => 'b','В' => 'V','в' => 'v','Г' => 'G','г' => 'g','Д' => 'D','д' => 'd',
+		'Е' => 'Ye','е' => 'e','Ё' => 'Ye','ё' => 'e','Ж' => 'Zh','ж' => 'zh','З' => 'Z','з' => 'z','И' => 'I','и' => 'i',
+		'Й' => 'Y','й' => 'y','К' => 'K','к' => 'k','Л' => 'L','л' => 'l','М' => 'M','м' => 'm','Н' => 'N','н' => 'n',
+		'О' => 'O','о' => 'o','П' => 'P','п' => 'p','Р' => 'R','р' => 'r','С' => 'S','с' => 's','Т' => 'T','т' => 't',
+		'У' => 'U','у' => 'u','Ф' => 'F','ф' => 'f','Х' => 'Kh','х' => 'kh','Ц' => 'Ts','ц' => 'ts','Ч' => 'Ch','ч' => 'ch',
+		'Ш' => 'Sh','ш' => 'sh','Щ' => 'Shch','щ' => 'shch','Ъ' => '','ъ' => '','Ы' => 'Y','ы' => 'y','Ь' => '','ь' => '',
+		'Э' => 'E','э' => 'e','Ю' => 'Yu','ю' => 'yu','Я' => 'Ya','я' => 'ya','@' => 'y','$' => 'ye'
+	) ;
+	
+	$string = str_replace( $arStrES , $arStrRS , $string ) ;
+	$string = str_replace( $arStrOS , $arStrRS , $string ) ;
+	$string = preg_replace( '{\s+}' , '-' , $string ) ;
+
+	return iconv( 'UTF-8' , 'UTF-8//IGNORE' , strtr( $string , $replace ) ) ;
+}
+
 /**
 * @const MIME-тип файлов ZIP
 */
@@ -28,7 +49,6 @@ define( 'ZIP_EXT' , 'zip' ) ;
 * @const системная временная директория
 */
 define( 'TMP_DIR' , '/tmp' ) ;
-
 
 /**
 * Удобная конструкция try-catch, служит для возможности выхода из блока
@@ -82,14 +102,22 @@ try {
 			/**
 			* @var string имя временной папки для разархивирования загруженного файла.
 			*/
-			$extracted_path = tempnam( TMP_DIR , ZIP_EXT ) ;
+
+			do {
+				$extracted_path = TMP_DIR . DIRECTORY_SEPARATOR . uniqid( ) ;
+			} while ( is_dir( $extracted_path ) ) ;
 
 			/**
 			* Разархивирование загруженного файла в папку для разархивирования.
 			* @var string вывод команды в STDOUT в виде строки.
 			* @var int код завершения команды.
 			*/
-			exec( "unzip '{$local_file_path}' -d '{$extracted_path}'" , $result , $result_code ) ;
+
+			exec(
+				'LANG=ru_RU.UTF-8 && ' .
+				"unzip -I utf8 '{$local_file_path}' -d '{$extracted_path}'" ,
+				$result , $result_code
+			) ;
 
 			/**
 			* Если разархивировать не удалось, то вывод информации из команды и выход из блока.
@@ -100,7 +128,7 @@ try {
 				*/
 				unlink( $local_file_path ) ;
 
-				throw new Exception( "При разархивировании произошла ошибка:\n{$result}" ) ;
+				throw new Exception( "При разархивировании произошла ошибка:\n" . print_r( $result , true ) ) ;
 			}
 
 			/**
@@ -111,18 +139,21 @@ try {
 			/**
 			* @var resource поиск графических файлов форматов jpg, gif, png в файлах папки архива.
 			*/
-			$fh_img = popen( "find '{$extracted_path}' -type 'f' -regextype 'awk' -iregex '\\.(?:jpg|gif|png)\$'" , 'rb' ) ;
+			$fh_img = popen(
+				"find '{$extracted_path}' -type 'f' -regextype 'awk' -iregex '^.*\\.(jpe?g|gif|png)\$'" ,
+				'rb'
+			) ;
 
 			/**
 			* Если произошла ошибка, то выход из блока.
 			*/
-			if ( empty( $fh ) ) {
+			if ( empty( $fh_img ) ) {
 				/**
 				* Удаление разархивированных файлов и временной папки.
 				*/
 				exec( "rm -fr '{$extracted_path}'" ) ;
 
-				throw new Exception( 'Внутренняя ошибка' ) ;
+				throw new Exception( 'Файлы картинок не найдены' ) ;
 			}
 
 			/**
@@ -131,19 +162,37 @@ try {
 			*/
 			while ( $file_path = fgets( $fh_img ) ) {
 				/**
+				* Удаление [\r\n]+
+				*/
+				$file_path = chop( $file_path ) ;
+
+				/**
+				* Функция pathinfo не поддерживает работу с многобайтовыми кодировками.
+				* Поэтому придётся пользоваться рег.выром.
+				* @var array переменные соответствия проверки рег.выра.
+				*/
+				if ( ! preg_match(
+					'{^(.*?)[\\\\/]*(([^/\\\\]*?)(\.([^\.\\\\/]+?)|))[\\\\/\.]*$}u' ,
+					$file_path ,
+					$matches
+				) ) {
+					error_log( "Ошибка определения имени файла \"{$file_path}\"." ) ;
+				}
+
+				/**
 				* @var string путь к найденному файлу.
 				*/
-				$file_dir = pathinfo( $file_path , PATHINFO_DIRNAME ) ;
+				$file_dir = $matches[ 1 ] ;
 
 				/**
 				* @var string имя с расширением найденного файла.
 				*/
-				$file_name = pathinfo( $file_path , PATHINFO_BASENAME ) ;
+				$file_name = $matches[ 2 ] ;
 
 				/**
 				* @var string имя с расширением найденного файла после транслита.
 				*/
-				$file_name_trans = iconv( 'UTF-8' , 'ASCII//TRANSLIT' , $file_name ) ;
+				$file_name_trans = get_in_translate_to_en( $file_name ) ;
 
 				/**
 				* Если имя найденного файла после транслита не изменилось, то пропуск его обработки.
@@ -177,8 +226,9 @@ try {
 				* @todo Нет сопоставления путей для файлов.
 				*/
 				exec(
-					"find '" . quotemeta( $extracted_path ) . "' -regextype awk -type f -iregex '^.*?\.html?$' -exec " .
-					"sed -i 's/" . preg_quote( $file_name ) . "/" . preg_quote( $file_path_trans ) . "/g' {} +"
+					"LANG=ru_RU.UTF-8 && " .
+					"find '{$extracted_path}' -regextype 'awk' -type 'f' -iregex '^.*?\.html?$' -exec " .
+					"sed -i 's/" . preg_quote( $file_name ) . "/" . preg_quote( $file_name_trans ) . "/g' {} +"
 				) ;
 			}
 
@@ -190,7 +240,7 @@ try {
 			/**
 			* @var string путь к новому архиву ZIP.
 			*/
-			$zip_path = tempnam( TMP_DIR , ZIP_EXT ) ;
+			$zip_path = tempnam( TMP_DIR , ZIP_EXT ) . '.' . ZIP_EXT ;
 
 
 			/**
