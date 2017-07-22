@@ -309,17 +309,19 @@ header( 'Content-Type: text/html; charset=utf-8' ) ;
 		<meta charset="utf-8">
 	</head>
 	<body>
-		<h1>Преобразование ZIP-архива</h1>
-		<form method="POST" enctype="multipart/form-data">
-			<input type="hidden" name="action" value="upload">
-			<label>
-				<span>укажите архив ZIP:</span>
-				<input type="file" name="file" accept="<?=ZIP_MIME?>" required>
-			</label>
-			<label>
-				<span>обработать</span>
-				<input type="submit" value="&rarr;">
-			</label>
-		</form>
+		<fieldset>
+			<legend><h1>Преобразование ZIP-архива</h1></legend>
+			<form method="POST" enctype="multipart/form-data">
+				<input type="hidden" name="action" value="upload">
+				<label>
+					<span>укажите архив ZIP:</span>
+					<input type="file" name="file" accept="<?=ZIP_MIME?>" required>
+				</label>
+				<label>
+					<span>обработать</span>
+					<input type="submit" value="&rarr;">
+				</label>
+			</form>
+		</fieldset>
 	</body>
 </html>
